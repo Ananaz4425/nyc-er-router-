@@ -194,8 +194,19 @@
       <span class="algo-badge">⚙ Min-Heap Dijkstra Algorithm</span>
       <div id="status-box">Connecting…</div>
 
-      <span class="label">Actions</span>
-      <button class="btn" onclick="resetHazards()">🔄 Refresh Live Closures</button>
+     <span class="label">Actions</span>
+
+<input id="address-input"
+  placeholder="Enter address (e.g. 350 5th Ave Manhattan)"
+  style="width:100%;padding:10px;margin-bottom:8px;
+  background:#0d1117;border:1px solid #30363d;
+  color:#e6edf3;border-radius:6px;" />
+
+<button class="btn" onclick="searchAddress()">📍 Locate Address</button>
+
+<button class="btn danger" onclick="clearAllPatients()">🧹 Clear Patients</button>
+
+<button class="btn" onclick="resetHazards()">🔄 Refresh Live Closures</button>
 
       <span class="label">Routing Result</span>
       <div id="routing-output">
