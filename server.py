@@ -212,10 +212,10 @@ def refresh_closures():
 
 @app.route("/api/geocode", methods=["POST"])
 def geocode():
-    data = request.get_json()
-    address = data.get("address", "")
+    from geocode import geocode_address
 
-    result = geocode_address(address)
+    data = request.get_json()
+    result = geocode_address(data.get("address",""))
 
     if not result:
         return jsonify({"error": "Address not found"})
