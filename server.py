@@ -3,7 +3,7 @@ NYC Emergency ER Router - server.py
 Run: pip install flask flask-cors && python server.py
 Then open http://localhost:5000 in your browser
 """
-
+from geocode import geocode_address
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
@@ -208,6 +208,20 @@ def refresh_closures():
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "closures_loaded": count})
+
+
+@app.route("/api/geocode", methods=["POST"])
+def geocode():
+    data = request.get_json()
+    address = data.get("address", "")
+
+    result = geocode_address(address)
+
+    if not result:
+        return jsonify({"error": "Address not found"})
+
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     print("NYC Emergency ER Router starting...")
