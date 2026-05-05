@@ -1,9 +1,9 @@
 """
 NYC Emergency ER Router - server.py
+Features: Address search, multi-patient, incident log, turn-by-turn directions
 Run: pip install flask flask-cors && python server.py
-Then open http://localhost:5000 in your browser
 """
-from geocode import geocode_address
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import sqlite3
@@ -11,14 +11,17 @@ import heapq
 import random
 import math
 import urllib.request
+import urllib.parse
 import json
+import os
+from datetime import datetime
 
 app = Flask(__name__, static_folder=".")
 CORS(app)
 
-DB_PATH = "emergency.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emergency.db")
 
-# ─── Manhattan Hospitals only ──────────────────────────────────────────────────
+# ─── Manhattan Hospitals ───────────────────────────────────────────────────────
 MANHATTAN_HOSPITALS = [
     ("Bellevue Hospital Center",              40.7394, -73.9759),
     ("NYU Langone Health",                    40.7421, -73.9740),
@@ -32,22 +35,18 @@ MANHATTAN_HOSPITALS = [
     ("NYC Health + Hospitals / Metropolitan", 40.7959, -73.9389),
 ]
 
-# ─── NYC DOT Real Road Closure API ────────────────────────────────────────────
 NYC_CLOSURE_API = (
     "https://data.cityofnewyork.us/resource/i6b5-j7bu.json"
     "?borough=MANHATTAN&$limit=50"
 )
 
 def fetch_real_closures():
-    print("Fetching real NYC road closures from NYC Open Data...")
+    print("Fetching real NYC road closures...")
     try:
-        req = urllib.request.Request(
-            NYC_CLOSURE_API,
-            headers={"Accept": "application/json", "User-Agent": "NYCERRouter/1.0"}
-        )
+        req = urllib.request.Request(NYC_CLOSURE_API,
+              headers={"Accept": "application/json", "User-Agent": "NYCERRouter/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             records = json.loads(resp.read())
-
         closures = []
         for r in records:
             loc = r.get("location", {})
@@ -62,15 +61,12 @@ def fetch_real_closures():
             if from_st and to_st:
                 label += f" ({from_st} to {to_st})"
             closures.append({"type": label, "lat": float(lat), "lon": float(lon), "severity": "High"})
-
         if closures:
-            print(f"Loaded {len(closures)} real road closures from NYC DOT.")
+            print(f"Loaded {len(closures)} real closures.")
             return closures
-        else:
-            print("API returned 0 closures with coords. Using fallback.")
-            return _fallback_hazards()
+        return _fallback_hazards()
     except Exception as e:
-        print(f"NYC API unavailable ({e}). Using fallback random hazards.")
+        print(f"NYC API unavailable ({e}). Using fallback.")
         return _fallback_hazards()
 
 def _fallback_hazards():
@@ -86,6 +82,18 @@ def init_db():
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS hospitals (id INTEGER PRIMARY KEY, name TEXT, lat REAL, lon REAL)')
     c.execute('CREATE TABLE IF NOT EXISTS hazards (id INTEGER PRIMARY KEY, type TEXT, lat REAL, lon REAL, severity TEXT)')
+    c.execute('''CREATE TABLE IF NOT EXISTS incident_log (
+                 id INTEGER PRIMARY KEY,
+                 timestamp TEXT,
+                 patient_label TEXT,
+                 patient_lat REAL,
+                 patient_lon REAL,
+                 patient_address TEXT,
+                 hospital_name TEXT,
+                 distance_km REAL,
+                 road_distance_km REAL,
+                 duration_min REAL
+               )''')
     if c.execute("SELECT COUNT(*) FROM hospitals").fetchone()[0] == 0:
         c.executemany("INSERT INTO hospitals (name, lat, lon) VALUES (?,?,?)", MANHATTAN_HOSPITALS)
         print(f"Seeded {len(MANHATTAN_HOSPITALS)} Manhattan hospitals.")
@@ -135,7 +143,57 @@ def dijkstra_nearest_er(p_lat, p_lon, hospitals, hazards, hazard_radius_km=0.8):
                     "path_cost_km": round(raw_dist, 2), "adjusted_cost": round(cost, 2)}
     return None
 
-# ─── Routes ────────────────────────────────────────────────────────────────────
+# ─── Address Geocoding (Nominatim - free, no key needed) ──────────────────────
+def geocode_address(address):
+    """Convert a Manhattan address string to lat/lon using OpenStreetMap Nominatim."""
+    query = urllib.parse.quote(f"{address}, Manhattan, New York City, NY")
+    url   = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "NYCERRouter/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            results = json.loads(resp.read())
+        if results:
+            return {"lat": float(results[0]["lat"]), "lon": float(results[0]["lon"]),
+                    "display": results[0]["display_name"]}
+    except Exception as e:
+        print(f"Geocoding error: {e}")
+    return None
+
+# ─── Turn-by-turn Directions ───────────────────────────────────────────────────
+def parse_directions(steps):
+    """Parse OSRM steps into simple turn-by-turn instructions."""
+    directions = []
+    for step in steps:
+        maneuver = step.get("maneuver", {})
+        mtype    = maneuver.get("type", "")
+        modifier = maneuver.get("modifier", "")
+        name     = step.get("name", "unnamed road")
+        distance = step.get("distance", 0)
+        duration = step.get("duration", 0)
+
+        if mtype == "depart":
+            instr = f"Start on {name}"
+        elif mtype == "arrive":
+            instr = "Arrive at destination"
+        elif mtype == "turn":
+            instr = f"Turn {modifier} onto {name}"
+        elif mtype == "new name":
+            instr = f"Continue onto {name}"
+        elif mtype == "merge":
+            instr = f"Merge onto {name}"
+        elif mtype == "roundabout":
+            instr = f"Enter roundabout, take exit onto {name}"
+        else:
+            instr = f"Continue on {name}"
+
+        if distance > 0:
+            dist_str = f"{distance:.0f}m" if distance < 1000 else f"{distance/1000:.1f}km"
+            instr += f" ({dist_str})"
+
+        directions.append({"instruction": instr, "distance_m": distance, "duration_s": duration})
+    return directions
+
+# ─── API Routes ────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
@@ -145,9 +203,11 @@ def status():
     conn = get_db()
     hcount   = conn.execute("SELECT COUNT(*) FROM hospitals").fetchone()[0]
     hazcount = conn.execute("SELECT COUNT(*) FROM hazards").fetchone()[0]
+    logcount = conn.execute("SELECT COUNT(*) FROM incident_log").fetchone()[0]
     conn.close()
     return jsonify({"ready": True, "hospitals_loaded": hcount, "hazards_loaded": hazcount,
-                    "engine": "Dijkstra (min-heap)", "data_source": "NYC DOT Open Data (live)"})
+                    "incidents_logged": logcount, "engine": "Dijkstra (min-heap)",
+                    "data_source": "NYC DOT Open Data (live)"})
 
 @app.route("/api/hospitals")
 def get_hospitals():
@@ -162,6 +222,18 @@ def get_hazards():
     rows = conn.execute("SELECT type, lat, lon, severity FROM hazards").fetchall()
     conn.close()
     return jsonify([{"type": r["type"], "lat": r["lat"], "lon": r["lon"], "severity": r["severity"]} for r in rows])
+
+@app.route("/api/geocode", methods=["POST"])
+def geocode():
+    """Convert address to lat/lon."""
+    data    = request.get_json()
+    address = data.get("address", "")
+    if not address:
+        return jsonify({"error": "No address provided"})
+    result = geocode_address(address)
+    if result:
+        return jsonify(result)
+    return jsonify({"error": "Address not found"})
 
 @app.route("/api/nearest-er", methods=["POST"])
 def nearest_er():
@@ -181,20 +253,75 @@ def get_route():
     data = request.get_json()
     url  = (f"http://router.project-osrm.org/route/v1/driving/"
             f"{data['from_lon']},{data['from_lat']};"
-            f"{data['to_lon']},{data['to_lat']}?overview=full&geometries=geojson")
+            f"{data['to_lon']},{data['to_lat']}"
+            f"?overview=full&geometries=geojson&steps=true")
     try:
         with urllib.request.urlopen(url, timeout=8) as resp:
             rd = json.loads(resp.read())
-        return jsonify({"geometry": rd["routes"][0]["geometry"],
-                        "distance_m": rd["routes"][0]["distance"],
-                        "duration_s": rd["routes"][0]["duration"]})
+        route = rd["routes"][0]
+        # Extract steps from all legs for turn-by-turn
+        all_steps = []
+        for leg in route.get("legs", []):
+            all_steps.extend(leg.get("steps", []))
+        directions = parse_directions(all_steps)
+        return jsonify({
+            "geometry":   route["geometry"],
+            "distance_m": route["distance"],
+            "duration_s": route["duration"],
+            "directions": directions
+        })
     except Exception:
-        return jsonify({"geometry": {"type": "LineString", "coordinates": [
-                            [data["from_lon"], data["from_lat"]],
-                            [data["to_lon"],   data["to_lat"]]]},
-                        "distance_m": haversine(data["from_lat"], data["from_lon"],
-                                                data["to_lat"],   data["to_lon"]) * 1000,
-                        "duration_s": 0, "note": "Straight-line fallback"})
+        return jsonify({
+            "geometry": {"type": "LineString", "coordinates": [
+                [data["from_lon"], data["from_lat"]],
+                [data["to_lon"],   data["to_lat"]]]},
+            "distance_m": haversine(data["from_lat"], data["from_lon"],
+                                    data["to_lat"],   data["to_lon"]) * 1000,
+            "duration_s": 0,
+            "directions": [{"instruction": "Proceed directly to hospital", "distance_m": 0, "duration_s": 0}],
+            "note": "Straight-line fallback"
+        })
+
+@app.route("/api/log-incident", methods=["POST"])
+def log_incident():
+    """Save a routing event to the incident log."""
+    data = request.get_json()
+    conn = get_db()
+    conn.execute('''INSERT INTO incident_log
+                    (timestamp, patient_label, patient_lat, patient_lon, patient_address,
+                     hospital_name, distance_km, road_distance_km, duration_min)
+                    VALUES (?,?,?,?,?,?,?,?,?)''', (
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        data.get("patient_label", "Patient"),
+        data.get("patient_lat"),
+        data.get("patient_lon"),
+        data.get("patient_address", ""),
+        data.get("hospital_name"),
+        data.get("distance_km"),
+        data.get("road_distance_km"),
+        data.get("duration_min")
+    ))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/incident-log")
+def get_incident_log():
+    """Return all logged incidents."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM incident_log ORDER BY timestamp DESC LIMIT 50"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/clear-log", methods=["POST"])
+def clear_log():
+    conn = get_db()
+    conn.execute("DELETE FROM incident_log")
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 @app.route("/api/refresh-closures", methods=["POST"])
 def refresh_closures():
@@ -209,25 +336,10 @@ def refresh_closures():
     conn.close()
     return jsonify({"ok": True, "closures_loaded": count})
 
-
-@app.route("/api/geocode", methods=["POST"])
-def geocode():
-    from geocode import geocode_address
-
-    data = request.get_json()
-    result = geocode_address(data.get("address",""))
-
-    if not result:
-        return jsonify({"error": "Address not found"})
-
-    return jsonify(result)
-
-
 if __name__ == "__main__":
     print("NYC Emergency ER Router starting...")
     init_db()
     print("Open http://localhost:5000 in your browser")
     app.run(debug=True, port=5000)
 else:
-    # This runs on PythonAnywhere
     init_db()
