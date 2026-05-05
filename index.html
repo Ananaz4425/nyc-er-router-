@@ -463,15 +463,20 @@ async function searchAddress() {
   const addr=document.getElementById('addr-input').value.trim();
   const res=document.getElementById('addr-result');
   if(!addr) return;
-  res.textContent='Geocoding…';
+  res.textContent='Searching…';
   try {
-    const geo=await fetch(`${API}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr})}).then(r=>r.json());
-    if(geo.error){res.textContent='❌ '+geo.error;return;}
+    const query = encodeURIComponent(addr + ', Manhattan, New York City, NY');
+    const url   = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=us`;
+    const results = await fetch(url).then(r=>r.json());
+    if(!results||!results.length){res.textContent='❌ Address not found. Try: 350 5th Ave';return;}
+    const lat=parseFloat(results[0].lat);
+    const lon=parseFloat(results[0].lon);
+    if(lat<40.70||lat>40.88||lon<-74.02||lon>-73.91){res.textContent='❌ Address outside Manhattan';return;}
     res.textContent='';
     document.getElementById('addr-input').value='';
-    addPatient(geo.lat,geo.lon,addr);
+    addPatient(lat,lon,addr);
     addFeed('Address located: '+addr.substring(0,30),'cyan');
-  } catch(e){res.textContent='❌ Geocoding failed';}
+  } catch(e){res.textContent='❌ Search failed. Try clicking the map instead.';console.error(e);}
 }
 
 // ── Patients ──────────────────────────────────────────────────────────────────
