@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeuroRoute</title>
+<title>NeuroRoute — Emergency Dispatch</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -223,8 +223,8 @@ body::before{
     <div class="brand">
       <div class="brand-icon">🚑</div>
       <div>
-        <div class="brand-text">NYC EMS COMMAND</div>
-        <div class="brand-sub">EMERGENCY DISPATCH SYSTEM v2.0</div>
+        <div class="brand-text">NeuroRoute</div>
+        <div class="brand-sub">Emergency Dispatch System</div>
       </div>
     </div>
     <div class="topbar-stat"><div class="val cyan" id="stat-patients">0</div><div class="lbl">Active</div></div>
@@ -476,7 +476,7 @@ async function searchAddress() {
 
 // ── Patients ──────────────────────────────────────────────────────────────────
 function addPatient(lat,lon,address='') {
-  const id=nextId++, label=`UNIT-${String(id).padStart(2,'0')}`;
+  const id=nextId++, label=`Patient ${nextId-1}`;
   const marker=L.marker([lat,lon],{icon:makePatIcon(label)})
     .addTo(patientGroup)
     .bindPopup(`<b style="color:#ffd60a">${label}</b>${address?'<br><span style="font-size:.75rem;color:#5a8aaa">'+address+'</span>':''}`);
