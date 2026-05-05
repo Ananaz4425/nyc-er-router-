@@ -2,614 +2,125 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ✅ FIXED viewport -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
 <title>NeuroRoute — Emergency Dispatch</title>
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+
 <style>
 :root {
-  --bg:        #040b14;
-  --panel:     #070f1a;
-  --panel2:    #0a1525;
-  --border:    #0f2236;
-  --border2:   #1a3a5c;
-  --cyan:      #00d4ff;
-  --cyan2:     #0099cc;
-  --red:       #ff2d55;
-  --red2:      #cc0033;
-  --green:     #00ff88;
-  --green2:    #00cc66;
-  --yellow:    #ffd60a;
-  --orange:    #ff6b35;
-  --text:      #c8dff0;
-  --text2:     #5a8aaa;
-  --glow-c:    0 0 20px rgba(0,212,255,.3);
-  --glow-r:    0 0 20px rgba(255,45,85,.3);
-  --glow-g:    0 0 20px rgba(0,255,136,.3);
+  --bg:#040b14;
+  --panel:#070f1a;
+  --panel2:#0a1525;
+  --border:#0f2236;
+  --border2:#1a3a5c;
+  --cyan:#00d4ff;
+  --red:#ff2d55;
+  --green:#00ff88;
+  --yellow:#ffd60a;
+  --text:#c8dff0;
+  --text2:#5a8aaa;
 }
 
+/* RESET */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;overflow:hidden;}
 
-/* ── Scanline overlay ── */
-body::before{
-  content:'';position:fixed;inset:0;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px);
-  pointer-events:none;z-index:9999;
+/* ✅ FIXED overflow */
+html,body{
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:sans-serif;
+  overflow:auto;
 }
 
-#app{display:grid;grid-template-columns:320px 1fr 300px;grid-template-rows:60px 1fr;height:100vh;gap:0;}
+/* ✅ FIXED height */
+#app{
+  display:grid;
+  grid-template-columns:320px 1fr 300px;
+  grid-template-rows:60px 1fr;
+  min-height:100vh;
+}
 
-/* ── Top Bar ── */
+/* TOP BAR */
 #topbar{
   grid-column:1/-1;
   background:var(--panel);
-  border-bottom:1px solid var(--border2);
-  display:flex;align-items:center;padding:0 20px;gap:24px;
-  position:relative;
-}
-#topbar::after{
-  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
-}
-.brand{display:flex;align-items:center;gap:12px;margin-right:20px;}
-.brand-icon{width:36px;height:36px;background:var(--red);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:var(--glow-r);}
-.brand-text{font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;letter-spacing:.15em;color:#fff;}
-.brand-sub{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--cyan);letter-spacing:.2em;}
-
-.topbar-stat{display:flex;flex-direction:column;align-items:center;padding:0 16px;border-left:1px solid var(--border);}
-.topbar-stat .val{font-family:'Rajdhani',sans-serif;font-size:1.4rem;font-weight:700;color:#fff;line-height:1;}
-.topbar-stat .lbl{font-size:.6rem;letter-spacing:.1em;color:var(--text2);text-transform:uppercase;margin-top:2px;}
-.topbar-stat .val.cyan{color:var(--cyan);}
-.topbar-stat .val.red{color:var(--red);}
-.topbar-stat .val.green{color:var(--green);}
-
-#clock{font-family:'Share Tech Mono',monospace;font-size:.85rem;color:var(--cyan);margin-left:auto;}
-#sys-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text2);margin-left:16px;}
-.pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-
-/* ── Left Panel ── */
-#left{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-
-.panel-header{
-  padding:12px 16px;border-bottom:1px solid var(--border);
-  font-family:'Rajdhani',sans-serif;font-size:.75rem;font-weight:700;
-  letter-spacing:.15em;text-transform:uppercase;color:var(--cyan);
-  display:flex;align-items:center;gap:8px;
-}
-.panel-header::before{content:'';width:3px;height:14px;background:var(--cyan);border-radius:2px;box-shadow:var(--glow-c);}
-
-/* Tabs */
-.tabs{display:flex;border-bottom:1px solid var(--border);}
-.tab{flex:1;padding:9px 4px;font-family:'Share Tech Mono',monospace;font-size:.6rem;text-align:center;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;transition:all .2s;letter-spacing:.05em;}
-.tab:hover{color:var(--text);}
-.tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
-
-.pane{display:none;flex:1;overflow-y:auto;padding:12px;}
-.pane.active{display:flex;flex-direction:column;gap:8px;}
-.pane::-webkit-scrollbar{width:3px;}
-.pane::-webkit-scrollbar-thumb{background:var(--border2);}
-
-/* Search */
-.search-wrap{position:relative;}
-.search-input{
-  width:100%;padding:9px 36px 9px 12px;
-  background:var(--panel2);border:1px solid var(--border2);
-  border-radius:4px;color:var(--text);font-family:'Barlow',sans-serif;font-size:.82rem;outline:none;
-  transition:border-color .2s;
-}
-.search-input:focus{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(0,212,255,.2);}
-.search-input::placeholder{color:var(--text2);}
-.search-btn{
-  position:absolute;right:6px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:var(--cyan);cursor:pointer;font-size:14px;padding:4px;
+  display:flex;
+  align-items:center;
+  padding:10px;
 }
 
-/* Section label */
-.sec{font-family:'Share Tech Mono',monospace;font-size:.58rem;letter-spacing:.12em;color:var(--text2);text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px;}
+/* PANELS */
+#left{background:var(--panel);}
+#right{background:var(--panel);}
 
-/* Buttons */
-.btn{
-  width:100%;padding:9px;border-radius:4px;font-family:'Rajdhani',sans-serif;
-  font-size:.8rem;font-weight:600;letter-spacing:.08em;cursor:pointer;
-  border:1px solid var(--border2);background:var(--panel2);color:var(--text);
-  transition:all .2s;text-align:center;
+/* MAP */
+#map{
+  width:100%;
+  height:100%;
 }
-.btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.05);}
-.btn.danger:hover{border-color:var(--red);color:var(--red);background:rgba(255,45,85,.05);}
-.btn.success:hover{border-color:var(--green);color:var(--green);background:rgba(0,255,136,.05);}
 
-/* Patient cards */
-.patient-card{
-  background:var(--panel2);border:1px solid var(--border);border-radius:4px;
-  padding:10px 12px;position:relative;overflow:hidden;
-  transition:border-color .2s;cursor:pointer;
+/* MOBILE */
+@media (max-width:768px){
+
+  #app{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto 350px auto;
+  }
+
+  #map{
+    height:350px; /* ✅ improved */
+  }
+
 }
-.patient-card:hover{border-color:var(--border2);}
-.patient-card.active-route{border-color:var(--cyan);}
-.patient-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--yellow);}
-.patient-card .p-id{font-family:'Rajdhani',sans-serif;font-size:.75rem;font-weight:700;color:var(--yellow);letter-spacing:.1em;}
-.patient-card .p-addr{font-size:.72rem;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.patient-card .p-hosp{font-size:.72rem;color:var(--green);margin-top:3px;}
-.patient-card .p-actions{display:flex;gap:4px;margin-top:6px;}
-.btn-xs{padding:4px 8px;font-size:.6rem;width:auto;font-family:'Share Tech Mono',monospace;border:1px solid var(--border2);border-radius:3px;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
-.btn-xs:hover{border-color:var(--cyan);color:var(--cyan);}
-.btn-xs.danger:hover{border-color:var(--red);color:var(--red);}
-
-/* Result card */
-.result-card{background:var(--panel2);border:1px solid var(--green);border-radius:4px;padding:12px;box-shadow:var(--glow-g);}
-.result-card .r-hosp{font-family:'Rajdhani',sans-serif;font-size:1rem;font-weight:700;color:var(--green);margin-bottom:6px;}
-.result-card .r-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.stat-mini{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:6px 8px;text-align:center;}
-.stat-mini .v{font-family:'Rajdhani',sans-serif;font-size:1rem;font-weight:700;color:var(--cyan);}
-.stat-mini .l{font-size:.58rem;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;}
-
-/* Hazard items */
-.hazard-item{background:var(--panel2);border:1px solid var(--border);border-left:2px solid var(--red);border-radius:4px;padding:8px 10px;font-size:.72rem;}
-.hazard-item .h-type{color:var(--red);font-weight:600;font-size:.75rem;}
-.hazard-item .h-loc{color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:.6rem;margin-top:2px;}
-
-/* Directions */
-.dir-step{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);align-items:flex-start;}
-.dir-step:last-child{border-bottom:none;}
-.dir-num{width:20px;height:20px;min-width:20px;background:var(--border2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--cyan);}
-.dir-text{font-size:.74rem;color:var(--text);line-height:1.4;}
-.dir-dist{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--text2);margin-top:2px;}
-
-/* Log */
-.log-item{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:9px 12px;font-size:.72rem;}
-.log-item .log-t{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--text2);}
-.log-item .log-p{color:var(--yellow);font-weight:600;margin-top:2px;}
-.log-item .log-h{color:var(--green);margin-top:1px;}
-.log-item .log-m{color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:.6rem;margin-top:3px;}
-
-/* ── Map ── */
-#map{background:#040b14;}
-.leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border:1px solid var(--border2);border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.8);}
-.leaflet-popup-tip{background:var(--panel);}
-.leaflet-popup-content{font-family:'Barlow',sans-serif;font-size:.82rem;}
-
-/* ── Right Panel ── */
-#right{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-
-/* Stats grid */
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;}
-.stat-card{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:12px;text-align:center;position:relative;overflow:hidden;}
-.stat-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,212,255,.03),transparent);pointer-events:none;}
-.stat-card .sv{font-family:'Rajdhani',sans-serif;font-size:1.8rem;font-weight:700;line-height:1;}
-.stat-card .sl{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);margin-top:4px;}
-.sv.cyan{color:var(--cyan);}
-.sv.red{color:var(--red);}
-.sv.green{color:var(--green);}
-.sv.yellow{color:var(--yellow);}
-
-/* Activity feed */
-.feed-item{padding:8px 12px;border-bottom:1px solid var(--border);font-size:.72rem;display:flex;gap:8px;align-items:flex-start;}
-.feed-dot{width:6px;height:6px;min-width:6px;border-radius:50%;margin-top:4px;}
-.feed-dot.cyan{background:var(--cyan);}
-.feed-dot.red{background:var(--red);}
-.feed-dot.green{background:var(--green);}
-.feed-dot.yellow{background:var(--yellow);}
-.feed-text{color:var(--text);line-height:1.4;}
-.feed-time{font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--text2);margin-top:2px;}
-
-/* Chart */
-.chart-wrap{padding:12px;border-top:1px solid var(--border);}
-.chart-label{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;}
-.bar-chart{display:flex;align-items:flex-end;gap:4px;height:60px;}
-.bar{flex:1;background:var(--border2);border-radius:2px 2px 0 0;position:relative;transition:height .5s ease;min-height:2px;}
-.bar.active{background:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4);}
-.bar-lbl{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--text2);text-align:center;margin-top:3px;}
-
-/* Computing animation */
-.computing{color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:.75rem;display:flex;align-items:center;gap:8px;}
-.computing::before{content:'';width:8px;height:8px;border:1px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
-/* Scrollbar */
-#right .scroll-feed{flex:1;overflow-y:auto;}
-#right .scroll-feed::-webkit-scrollbar{width:3px;}
-#right .scroll-feed::-webkit-scrollbar-thumb{background:var(--border2);}
-
-.empty{font-size:.72rem;color:var(--text2);text-align:center;padding:16px;font-family:'Share Tech Mono',monospace;}
 </style>
 </head>
+
 <body>
+
 <div id="app">
 
-  <!-- TOP BAR -->
   <div id="topbar">
-    <div class="brand">
-      <div class="brand-icon">🚑</div>
-      <div>
-        <div class="brand-text">NeuroRoute</div>
-        <div class="brand-sub">Emergency Dispatch System</div>
-      </div>
-    </div>
-    <div class="topbar-stat"><div class="val cyan" id="stat-patients">0</div><div class="lbl">Active</div></div>
-    <div class="topbar-stat"><div class="val green" id="stat-routed">0</div><div class="lbl">Routed</div></div>
-    <div class="topbar-stat"><div class="val red" id="stat-hazards">0</div><div class="lbl">Hazards</div></div>
-    <div class="topbar-stat"><div class="val" id="stat-hospitals">0</div><div class="lbl">Hospitals</div></div>
-    <div id="clock">--:--:--</div>
-    <div id="sys-status"><div class="pulse-dot"></div><span>SYSTEM ONLINE</span></div>
+    🚑 NeuroRoute
   </div>
 
-  <!-- LEFT PANEL -->
   <div id="left">
-    <div class="panel-header">Dispatch Control</div>
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('dispatch')">DISPATCH</div>
-      <div class="tab" onclick="switchTab('patients')">PATIENTS</div>
-      <div class="tab" onclick="switchTab('nav')">NAV</div>
-      <div class="tab" onclick="switchTab('hazards')">HAZARDS</div>
-    </div>
-
-    <!-- DISPATCH PANE -->
-    <div id="pane-dispatch" class="pane active">
-      <div class="sec">Address Search</div>
-      <div class="search-wrap">
-        <input id="addr-input" class="search-input" placeholder="Enter address…" onkeydown="if(event.key==='Enter')searchAddress()"/>
-        <button class="search-btn" onclick="searchAddress()">⌕</button>
-      </div>
-      <div id="addr-result" style="font-size:.7rem;color:var(--text2);min-height:14px;"></div>
-
-      <div class="sec">Actions</div>
-      <button class="btn" onclick="refreshClosures()">↻ REFRESH LIVE CLOSURES</button>
-      <button class="btn danger" onclick="clearAllPatients()">✕ CLEAR ALL PATIENTS</button>
-
-      <div class="sec">Last Route</div>
-      <div id="routing-output"><div class="empty">Click map or search address</div></div>
-    </div>
-
-    <!-- PATIENTS PANE -->
-    <div id="pane-patients" class="pane">
-      <div class="sec">Active Patients (<span id="pt-count">0</span>)</div>
-      <div id="patient-list"><div class="empty">No patients added yet</div></div>
-    </div>
-
-    <!-- NAV PANE -->
-    <div id="pane-nav" class="pane">
-      <div class="sec">Turn-by-Turn Navigation</div>
-      <div id="directions-output"><div class="empty">Route a patient to see navigation</div></div>
-    </div>
-
-    <!-- HAZARDS PANE -->
-    <div id="pane-hazards" class="pane">
-      <div class="sec">Active Hazard Zones</div>
-      <div id="hazard-list"><div class="empty">Loading…</div></div>
-    </div>
+    LEFT PANEL
   </div>
 
-  <!-- MAP -->
   <div id="map"></div>
 
-  <!-- RIGHT PANEL -->
   <div id="right">
-    <div class="panel-header">Analytics</div>
-
-    <div class="stats-grid">
-      <div class="stat-card"><div class="sv cyan" id="s-today">0</div><div class="sl">Today</div></div>
-      <div class="stat-card"><div class="sv green" id="s-avg">0m</div><div class="sl">Avg ETA</div></div>
-      <div class="stat-card"><div class="sv yellow" id="s-dist">0</div><div class="sl">Avg km</div></div>
-      <div class="stat-card"><div class="sv red" id="s-week">0</div><div class="sl">This Week</div></div>
-    </div>
-
-    <div class="chart-wrap">
-      <div class="chart-label">Incidents — Last 7 Days</div>
-      <div class="bar-chart" id="bar-chart"></div>
-      <div id="bar-labels" style="display:flex;gap:4px;"></div>
-    </div>
-
-    <div class="panel-header" style="border-top:1px solid var(--border);">Activity Feed</div>
-    <div class="scroll-feed" id="activity-feed">
-      <div class="empty">No activity yet</div>
-    </div>
+    RIGHT PANEL
   </div>
 
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-const API = "/api";
 
-// ── Map ───────────────────────────────────────────────────────────────────────
-const map = L.map('map',{zoomControl:true,attributionControl:false}).setView([40.7831,-73.9712],13);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
-L.control.attribution({prefix:'© OpenStreetMap © CARTO',position:'bottomright'}).addTo(map);
+// MAP INIT
+const map = L.map('map').setView([40.7831,-73.9712],13);
 
-const hospitalGroup = L.layerGroup().addTo(map);
-const hazardGroup   = L.layerGroup().addTo(map);
-const patientGroup  = L.layerGroup().addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19
+}).addTo(map);
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const hospIcon = L.divIcon({
-  html:'<div style="font-size:18px;filter:drop-shadow(0 0 6px rgba(0,255,136,.8))">🏥</div>',
-  className:'',iconSize:[22,22],iconAnchor:[11,11]
-});
-const makePatIcon = (label) => L.divIcon({
-  html:`<div style="background:#ffd60a;color:#040b14;font-family:\'Rajdhani\',sans-serif;font-size:.65rem;font-weight:700;padding:2px 6px;border-radius:3px;white-space:nowrap;box-shadow:0 0 10px rgba(255,214,10,.6)">${label}</div>`,
-  className:'',iconAnchor:[18,10]
+// ✅ FIX: map rendering on mobile
+setTimeout(()=>{
+  map.invalidateSize();
+},300);
+
+window.addEventListener('resize',()=>{
+  map.invalidateSize();
 });
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let patients = [], nextId = 1, totalRouted = 0, activeRoute = null;
-const activityLog = [];
-
-// ── Clock ─────────────────────────────────────────────────────────────────────
-function tickClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toLocaleTimeString('en-US',{hour12:false}) + ' EDT';
-}
-setInterval(tickClock, 1000); tickClock();
-
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i)=>{
-    t.classList.toggle('active',['dispatch','patients','nav','hazards'][i]===name);
-  });
-  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById(`pane-${name}`).classList.add('active');
-  if(name==='nav'||name==='hazards') {} // already rendered
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
-  await checkStatus();
-  await loadHospitals();
-  await loadHazards();
-  await loadAnalytics();
-}
-
-async function checkStatus() {
-  try {
-    const d = await fetch(`${API}/status`).then(r=>r.json());
-    document.getElementById('stat-hospitals').textContent = d.hospitals_loaded;
-    document.getElementById('stat-hazards').textContent   = d.hazards_loaded;
-    addFeed('System online — '+d.hospitals_loaded+' hospitals loaded','cyan');
-  } catch {
-    addFeed('Cannot connect to server','red');
-  }
-}
-
-async function loadHospitals() {
-  try {
-    const hospitals = await fetch(`${API}/hospitals`).then(r=>r.json());
-    hospitalGroup.clearLayers();
-    hospitals.forEach(h=>{
-      L.marker([h.lat,h.lon],{icon:hospIcon})
-       .bindPopup(`<b style="color:#00ff88">${h.name}</b><br><span style="color:#5a8aaa;font-size:.75rem">Emergency Room</span>`)
-       .addTo(hospitalGroup);
-    });
-  } catch(e){console.error(e);}
-}
-
-async function loadHazards() {
-  try {
-    const hazards = await fetch(`${API}/hazards`).then(r=>r.json());
-    hazardGroup.clearLayers();
-    const list = document.getElementById('hazard-list');
-    list.innerHTML='';
-    hazards.forEach(h=>{
-      L.circle([h.lat,h.lon],{color:'#ff2d55',fillColor:'#ff2d55',fillOpacity:.12,weight:1.5,dashArray:'6,4',radius:800})
-       .bindPopup(`<b style="color:#ff2d55">⚠ ${h.type}</b>`)
-       .addTo(hazardGroup);
-      list.innerHTML+=`<div class="hazard-item"><div class="h-type">⚠ ${h.type}</div><div class="h-loc">${h.lat.toFixed(4)}, ${h.lon.toFixed(4)}</div></div>`;
-    });
-    document.getElementById('stat-hazards').textContent = hazards.length;
-  } catch(e){console.error(e);}
-}
-
-// ── Analytics ─────────────────────────────────────────────────────────────────
-async function loadAnalytics() {
-  try {
-    const logs = await fetch(`${API}/incident-log`).then(r=>r.json());
-    const today = new Date().toISOString().split('T')[0];
-    const todayLogs = logs.filter(l=>l.timestamp&&l.timestamp.startsWith(today));
-
-    document.getElementById('s-today').textContent = todayLogs.length;
-    document.getElementById('s-week').textContent  = logs.length;
-
-    const etaLogs  = logs.filter(l=>l.duration_min);
-    const distLogs = logs.filter(l=>l.road_distance_km);
-    document.getElementById('s-avg').textContent =
-      etaLogs.length ? Math.round(etaLogs.reduce((a,l)=>a+l.duration_min,0)/etaLogs.length)+'m' : '—';
-    document.getElementById('s-dist').textContent =
-      distLogs.length ? (distLogs.reduce((a,l)=>a+l.road_distance_km,0)/distLogs.length).toFixed(1) : '—';
-
-    buildBarChart(logs);
-  } catch(e){console.error(e);}
-}
-
-function buildBarChart(logs) {
-  const days=[]; const labels=[];
-  for(let i=6;i>=0;i--){
-    const d=new Date(); d.setDate(d.getDate()-i);
-    const key=d.toISOString().split('T')[0];
-    days.push(logs.filter(l=>l.timestamp&&l.timestamp.startsWith(key)).length);
-    labels.push(['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()]);
-  }
-  const max=Math.max(...days,1);
-  const chart=document.getElementById('bar-chart');
-  const lblEl=document.getElementById('bar-labels');
-  chart.innerHTML='';lblEl.innerHTML='';
-  const todayIdx=6;
-  days.forEach((v,i)=>{
-    const pct=Math.max((v/max)*56,2);
-    chart.innerHTML+=`<div class="bar${i===todayIdx?' active':''}" style="height:${pct}px" title="${v} incidents"></div>`;
-    lblEl.innerHTML+=`<div class="bar-lbl" style="flex:1;text-align:center">${labels[i]}</div>`;
-  });
-}
-
-// ── Activity Feed ─────────────────────────────────────────────────────────────
-function addFeed(text, type='cyan') {
-  activityLog.unshift({text,type,time:new Date().toLocaleTimeString('en-US',{hour12:false})});
-  if(activityLog.length>30) activityLog.pop();
-  renderFeed();
-}
-function renderFeed() {
-  const el=document.getElementById('activity-feed');
-  if(!activityLog.length){el.innerHTML='<div class="empty">No activity yet</div>';return;}
-  el.innerHTML=activityLog.map(a=>`
-    <div class="feed-item">
-      <div class="feed-dot ${a.type}"></div>
-      <div><div class="feed-text">${a.text}</div><div class="feed-time">${a.time}</div></div>
-    </div>`).join('');
-}
-
-// ── Address Search ────────────────────────────────────────────────────────────
-async function searchAddress() {
-  const addr=document.getElementById('addr-input').value.trim();
-  const res=document.getElementById('addr-result');
-  if(!addr) return;
-  res.textContent='Searching…';
-  try {
-    const query = encodeURIComponent(addr + ', Manhattan, New York City, NY');
-    const url   = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=us`;
-    const results = await fetch(url).then(r=>r.json());
-    if(!results||!results.length){res.textContent='❌ Address not found. Try: 350 5th Ave';return;}
-    const lat=parseFloat(results[0].lat);
-    const lon=parseFloat(results[0].lon);
-    if(lat<40.70||lat>40.88||lon<-74.02||lon>-73.91){res.textContent='❌ Address outside Manhattan';return;}
-    res.textContent='';
-    document.getElementById('addr-input').value='';
-    addPatient(lat,lon,addr);
-    addFeed('Address located: '+addr.substring(0,30),'cyan');
-  } catch(e){res.textContent='❌ Search failed. Try clicking the map instead.';console.error(e);}
-}
-
-// ── Patients ──────────────────────────────────────────────────────────────────
-function addPatient(lat,lon,address='') {
-  const id=nextId++, label=`Patient ${nextId-1}`;
-  const marker=L.marker([lat,lon],{icon:makePatIcon(label)})
-    .addTo(patientGroup)
-    .bindPopup(`<b style="color:#ffd60a">${label}</b>${address?'<br><span style="font-size:.75rem;color:#5a8aaa">'+address+'</span>':''}`);
-  const p={id,label,lat,lon,address,marker,routeLayer:null,hospital:null};
-  patients.push(p);
-  updatePatientStats();
-  renderPatients();
-  routePatient(p);
-}
-
-function renderPatients() {
-  const list=document.getElementById('patient-list');
-  document.getElementById('pt-count').textContent=patients.length;
-  if(!patients.length){list.innerHTML='<div class="empty">No active patients</div>';return;}
-  list.innerHTML=patients.map(p=>`
-    <div class="patient-card${p.routeLayer?' active-route':''}" id="pc-${p.id}">
-      <div class="p-id">▶ ${p.label}</div>
-      <div class="p-addr">${p.address||p.lat.toFixed(4)+', '+p.lon.toFixed(4)}</div>
-      ${p.hospital?`<div class="p-hosp">→ ${p.hospital}</div>`:'<div class="p-hosp" style="color:var(--text2)">Routing…</div>'}
-      <div class="p-actions">
-        <button class="btn-xs" onclick="routePatient(patients.find(x=>x.id==${p.id}))">↺ REROUTE</button>
-        <button class="btn-xs danger" onclick="removePatient(${p.id})">✕</button>
-      </div>
-    </div>`).join('');
-}
-
-function removePatient(id) {
-  const p=patients.find(x=>x.id===id);
-  if(!p) return;
-  map.removeLayer(p.marker);
-  if(p.routeLayer) map.removeLayer(p.routeLayer);
-  patients=patients.filter(x=>x.id!==id);
-  updatePatientStats();
-  renderPatients();
-  addFeed(`${p.label} removed from dispatch`,'yellow');
-}
-
-function clearAllPatients() {
-  patients.forEach(p=>{map.removeLayer(p.marker);if(p.routeLayer)map.removeLayer(p.routeLayer);});
-  patients=[];
-  updatePatientStats();
-  renderPatients();
-  document.getElementById('routing-output').innerHTML='<div class="empty">Click map or search address</div>';
-  document.getElementById('directions-output').innerHTML='<div class="empty">Route a patient to see navigation</div>';
-  addFeed('All patients cleared','red');
-}
-
-function updatePatientStats() {
-  document.getElementById('stat-patients').textContent=patients.length;
-  document.getElementById('stat-routed').textContent=totalRouted;
-}
-
-// ── Routing ───────────────────────────────────────────────────────────────────
-async function routePatient(p) {
-  const out=document.getElementById('routing-output');
-  out.innerHTML='<div class="computing">CALCULATING ROUTE</div>';
-
-  try {
-    const er=await fetch(`${API}/nearest-er`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat:p.lat,lon:p.lon})}).then(r=>r.json());
-    if(er.error){out.innerHTML=`<div class="empty">${er.error}</div>`;return;}
-
-    const route=await fetch(`${API}/route`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from_lat:p.lat,from_lon:p.lon,to_lat:er.lat,to_lon:er.lon})}).then(r=>r.json());
-
-    const roadKm=(route.distance_m/1000).toFixed(2);
-    const mins=route.duration_s?Math.ceil(route.duration_s/60):'—';
-
-    p.hospital=er.name;
-    totalRouted++;
-    updatePatientStats();
-    renderPatients();
-
-    out.innerHTML=`
-      <div class="result-card">
-        <div class="r-hosp">🏥 ${er.name}</div>
-        <div class="r-grid">
-          <div class="stat-mini"><div class="v">${er.path_cost_km}</div><div class="l">Grid km</div></div>
-          <div class="stat-mini"><div class="v">${roadKm}</div><div class="l">Road km</div></div>
-          <div class="stat-mini"><div class="v">${mins}</div><div class="l">ETA min</div></div>
-          <div class="stat-mini"><div class="v">${p.label}</div><div class="l">Unit</div></div>
-        </div>
-      </div>`;
-
-    if(p.routeLayer) map.removeLayer(p.routeLayer);
-    p.routeLayer=L.geoJSON(route.geometry,{style:{color:'#00d4ff',weight:4,opacity:.9}}).addTo(map);
-    map.fitBounds(p.routeLayer.getBounds(),{padding:[80,80]});
-
-    showDirections(route.directions,p.label,er.name);
-    addFeed(`${p.label} → ${er.name} (${roadKm}km, ${mins}min)`,'green');
-
-    await fetch(`${API}/log-incident`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patient_label:p.label,patient_lat:p.lat,patient_lon:p.lon,patient_address:p.address,hospital_name:er.name,distance_km:er.path_cost_km,road_distance_km:parseFloat(roadKm),duration_min:route.duration_s?Math.ceil(route.duration_s/60):null})});
-    await loadAnalytics();
-
-  } catch(err){
-    out.innerHTML='<div class="empty">Routing failed</div>';
-    addFeed('Routing error for '+p.label,'red');
-    console.error(err);
-  }
-}
-
-// ── Directions ────────────────────────────────────────────────────────────────
-function showDirections(directions,label,hosp) {
-  const el=document.getElementById('directions-output');
-  if(!directions||!directions.length){el.innerHTML='<div class="empty">No directions available</div>';return;}
-  el.innerHTML=`
-    <div style="font-size:.7rem;color:var(--text2);margin-bottom:8px;font-family:\'Share Tech Mono\',monospace">
-      ${label} → <span style="color:var(--green)">${hosp}</span>
-    </div>
-    ${directions.map((d,i)=>`
-      <div class="dir-step">
-        <div class="dir-num">${i+1}</div>
-        <div><div class="dir-text">${d.instruction}</div></div>
-      </div>`).join('')}`;
-}
-
-async function refreshClosures() {
-  addFeed('Fetching live road closures…','yellow');
-  await fetch(`${API}/refresh-closures`,{method:'POST'});
-  await loadHazards();
-  addFeed('Road closures updated','cyan');
-}
-
-// ── Map Click ─────────────────────────────────────────────────────────────────
-map.on('click',({latlng:{lat,lng}})=>{
-  addPatient(lat,lng);
-  switchTab('dispatch');
-});
-
-init();
 </script>
+
 </body>
 </html>
